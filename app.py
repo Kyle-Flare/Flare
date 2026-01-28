@@ -21,9 +21,6 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect, QInputDialog, QListWidget, QListWidgetItem
 )
 
-import qrcode
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
 
 
 APP_TITLE = "Inventory MVP"
@@ -81,6 +78,27 @@ def make_card(title: str, content_widget: QWidget) -> QFrame:
     shadow.setBlurRadius(18)
     shadow.setOffset(0, 6)
     shadow.setColor(QColor(0, 0, 0, 35))  # subtle shadow via alpha
+    card.setGraphicsEffect(shadow)
+
+    return card
+
+
+def make_glass_card(title: str, content_widget: QWidget) -> QFrame:
+    card = QFrame()
+    card.setObjectName("GlassCard")
+    lay = QVBoxLayout(card)
+    lay.setContentsMargins(18, 18, 18, 18)
+    lay.setSpacing(12)
+
+    t = QLabel(title)
+    t.setStyleSheet("font-size: 13px; font-weight: 700; color: #1f2a37;")
+    lay.addWidget(t)
+    lay.addWidget(content_widget)
+
+    shadow = QGraphicsDropShadowEffect()
+    shadow.setBlurRadius(28)
+    shadow.setOffset(0, 10)
+    shadow.setColor(QColor(20, 32, 45, 50))
     card.setGraphicsEffect(shadow)
 
     return card
@@ -449,6 +467,16 @@ class DB:
 # -----------------------------
 
 def generate_qr_label_pdf(output_pdf: str, sku: str, title: str = "", size_in: float = 1.5) -> None:
+    if importlib.util.find_spec("qrcode") is None or importlib.util.find_spec("reportlab") is None:
+        raise RuntimeError(
+            "QR label generation requires the 'qrcode' and 'reportlab' packages. "
+            "Install them to enable PDF label export."
+        )
+
+    import qrcode
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import inch
+
     c = canvas.Canvas(output_pdf, pagesize=(size_in * inch, size_in * inch))
 
     qr = qrcode.QRCode(
@@ -1044,6 +1072,189 @@ class DashboardWidget(QWidget):
         repolish_table(self.top_tbl)
 
 
+class TextMessageGeneratorWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        root = QVBoxLayout()
+        header = QLabel("Text Message Generator")
+        header.setStyleSheet("font-size: 16px; font-weight: 700;")
+        root.addWidget(header)
+
+        form_widget = QWidget()
+        form_widget.setObjectName("GlassPanel")
+        form_layout = QFormLayout(form_widget)
+        form_layout.setLabelAlignment(Qt.AlignLeft)
+        form_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form_layout.setHorizontalSpacing(14)
+        form_layout.setVerticalSpacing(10)
+
+        self.business_name = QLineEdit()
+        self.business_name.setObjectName("GlassInput")
+        self.business_name.setPlaceholderText("e.g., Postfully")
+
+        self.recipient_name = QLineEdit()
+        self.recipient_name.setObjectName("GlassInput")
+        self.recipient_name.setPlaceholderText("Optional recipient name")
+
+        self.offer = QLineEdit()
+        self.offer.setObjectName("GlassInput")
+        self.offer.setPlaceholderText("e.g., 20% off, free demo, new update")
+
+        self.call_to_action = QLineEdit()
+        self.call_to_action.setObjectName("GlassInput")
+        self.call_to_action.setPlaceholderText("e.g., Reply YES, Book a time, Shop now")
+
+        self.link = QLineEdit()
+        self.link.setObjectName("GlassInput")
+        self.link.setPlaceholderText("Optional link")
+
+        self.sender_name = QLineEdit()
+        self.sender_name.setObjectName("GlassInput")
+        self.sender_name.setPlaceholderText("e.g., Jamie from Postfully")
+
+        self.tone = QComboBox()
+        self.tone.setObjectName("GlassSelect")
+        self.tone.addItems(["Friendly", "Professional", "Casual", "Urgent", "Promotional"])
+
+        self.message_type = QComboBox()
+        self.message_type.setObjectName("GlassSelect")
+        self.message_type.addItems(["Promotion", "Reminder", "Announcement", "Follow-up"])
+
+        self.length = QComboBox()
+        self.length.setObjectName("GlassSelect")
+        self.length.addItems(["Short", "Standard", "Detailed"])
+
+        form_layout.addRow("Business name", self.business_name)
+        form_layout.addRow("Recipient name", self.recipient_name)
+        form_layout.addRow("Offer or update", self.offer)
+        form_layout.addRow("Call to action", self.call_to_action)
+        form_layout.addRow("Link", self.link)
+        form_layout.addRow("Sender name", self.sender_name)
+        form_layout.addRow("Tone", self.tone)
+        form_layout.addRow("Message type", self.message_type)
+        form_layout.addRow("Length", self.length)
+
+        root.addWidget(make_glass_card("Details", form_widget))
+
+        output_widget = QWidget()
+        output_widget.setObjectName("GlassPanel")
+        output_layout = QVBoxLayout(output_widget)
+        output_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.output = QTextEdit()
+        self.output.setObjectName("GlassOutput")
+        self.output.setPlaceholderText("Generated message will appear here.")
+        self.output.setReadOnly(True)
+        output_layout.addWidget(self.output)
+
+        button_row = QHBoxLayout()
+        self.generate_btn = QPushButton("Generate Message")
+        self.generate_btn.setObjectName("GlassPrimaryButton")
+        self.copy_btn = QPushButton("Copy to Clipboard")
+        self.copy_btn.setObjectName("GlassButton")
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setObjectName("GlassButton")
+        button_row.addWidget(self.generate_btn)
+        button_row.addWidget(self.copy_btn)
+        button_row.addWidget(self.reset_btn)
+        button_row.addStretch(1)
+        output_layout.addLayout(button_row)
+
+        root.addWidget(make_glass_card("Message", output_widget))
+        root.addStretch(1)
+
+        self.setLayout(root)
+
+        self.generate_btn.clicked.connect(self.generate_message)
+        self.copy_btn.clicked.connect(self.copy_message)
+        self.reset_btn.clicked.connect(self.reset_form)
+
+    def _build_message_parts(self) -> Tuple[str, str, str]:
+        tone = self.tone.currentText().lower()
+        message_type = self.message_type.currentText().lower()
+        length = self.length.currentText().lower()
+
+        greeting = "Hi there"
+        name = self.recipient_name.text().strip()
+        if name:
+            greeting = f"Hi {name}"
+
+        business = self.business_name.text().strip()
+        offer = self.offer.text().strip()
+        cta = self.call_to_action.text().strip()
+
+        intro_bits = []
+        if message_type == "promotion":
+            intro_bits.append("We've got something special for you" if tone != "professional" else "We have a new offer available")
+        elif message_type == "reminder":
+            intro_bits.append("Just a quick reminder" if tone != "urgent" else "Important reminder")
+        elif message_type == "announcement":
+            intro_bits.append("Wanted to share an update" if tone != "casual" else "Quick update for you")
+        else:
+            intro_bits.append("Following up" if tone != "casual" else "Just checking in")
+
+        if business:
+            intro_bits.append(f"from {business}")
+
+        if offer:
+            if message_type == "reminder":
+                intro_bits.append(f"about {offer}")
+            else:
+                intro_bits.append(f": {offer}")
+
+        body = " ".join(intro_bits).replace(" :", ":")
+        if length == "detailed":
+            extra = "Let me know if you'd like more details." if tone != "urgent" else "Time-sensitive, so please take a look."
+            body = f"{body} {extra}".strip()
+        elif length == "short":
+            body = body.split(".")[0]
+
+        cta_line = ""
+        if cta:
+            cta_line = f"{cta}."
+        return greeting, body, cta_line
+
+    def generate_message(self):
+        greeting, body, cta_line = self._build_message_parts()
+
+        link = self.link.text().strip()
+        sender = self.sender_name.text().strip()
+
+        parts = [f"{greeting},"]
+        if body:
+            parts.append(body)
+        if cta_line:
+            parts.append(cta_line)
+        if link:
+            parts.append(link)
+        if sender:
+            parts.append(f"- {sender}")
+
+        message = " ".join([p for p in parts if p]).strip()
+        self.output.setPlainText(message)
+
+    def copy_message(self):
+        text = self.output.toPlainText().strip()
+        if not text:
+            QMessageBox.information(self, "Nothing to copy", "Generate a message first.")
+            return
+        QApplication.clipboard().setText(text)
+        QMessageBox.information(self, "Copied", "Message copied to clipboard.")
+
+    def reset_form(self):
+        self.business_name.clear()
+        self.recipient_name.clear()
+        self.offer.clear()
+        self.call_to_action.clear()
+        self.link.clear()
+        self.sender_name.clear()
+        self.tone.setCurrentIndex(0)
+        self.message_type.setCurrentIndex(0)
+        self.length.setCurrentIndex(1)
+        self.output.clear()
+
+
 class InventoryWidget(QWidget):
     def __init__(self, db: DB):
         super().__init__()
@@ -1440,7 +1651,11 @@ class SkuManagerWidget(QWidget):
         out_path, _ = QFileDialog.getSaveFileName(self, "Save QR Label PDF", f"{sku}_label.pdf", "PDF (*.pdf)")
         if not out_path:
             return
-        generate_qr_label_pdf(out_path, sku=sku, title=row["name"], size_in=1.5)
+        try:
+            generate_qr_label_pdf(out_path, sku=sku, title=row["name"], size_in=1.5)
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "Missing dependency", str(exc))
+            return
         QMessageBox.information(self, "Label created", f"Saved:\n{out_path}")
 
 
@@ -1630,18 +1845,48 @@ class MainWindow(QMainWindow):
         self._users_tab_index: Optional[int] = None
 
         self.setStyleSheet("""
-            QMainWindow { background: #f4f5f7; }
+            QMainWindow {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #e8f0ff,
+                    stop:0.5 #f7faff,
+                    stop:1 #e9f6ff
+                );
+            }
             QWidget { font-size: 13px; }
             QFrame#Card {
                 background: white;
                 border: 1px solid #e7e7ea;
                 border-radius: 14px;
             }
+            QFrame#GlassCard {
+                background: rgba(255, 255, 255, 0.65);
+                border: 1px solid rgba(255, 255, 255, 0.9);
+                border-radius: 20px;
+            }
+            QWidget#GlassPanel {
+                background: rgba(255, 255, 255, 0.4);
+                border-radius: 16px;
+            }
             QLineEdit, QTextEdit, QSpinBox, QComboBox {
                 background: white;
                 border: 1px solid #dadade;
                 border-radius: 10px;
                 padding: 7px;
+            }
+            QLineEdit#GlassInput, QTextEdit#GlassOutput {
+                background: rgba(255, 255, 255, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.85);
+                border-radius: 14px;
+                padding: 10px;
+                color: #1f2a37;
+            }
+            QComboBox#GlassSelect {
+                background: rgba(255, 255, 255, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.85);
+                border-radius: 14px;
+                padding: 7px 10px;
+                color: #1f2a37;
             }
             QPushButton {
                 background: white;
@@ -1652,6 +1897,26 @@ class MainWindow(QMainWindow):
             }
             QPushButton:hover { border-color: #bdbdc2; }
             QPushButton:disabled { color: #999; }
+            QPushButton#GlassButton {
+                background: rgba(255, 255, 255, 0.55);
+                border: 1px solid rgba(255, 255, 255, 0.85);
+                border-radius: 14px;
+                padding: 10px 16px;
+                color: #1f2a37;
+            }
+            QPushButton#GlassButton:hover {
+                background: rgba(255, 255, 255, 0.75);
+            }
+            QPushButton#GlassPrimaryButton {
+                background: rgba(56, 125, 255, 0.2);
+                border: 1px solid rgba(56, 125, 255, 0.4);
+                border-radius: 14px;
+                padding: 10px 18px;
+                color: #0b1a33;
+            }
+            QPushButton#GlassPrimaryButton:hover {
+                background: rgba(56, 125, 255, 0.3);
+            }
             QTableWidget {
                 background: white;
                 border: 1px solid #e7e7ea;
@@ -1671,6 +1936,7 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
         self.dashboard = DashboardWidget(db)
+        self.text_message_generator = TextMessageGeneratorWidget()
         self.inventory = InventoryWidget(db)
         self.skus = SkuManagerWidget(db, is_admin=(session.role == "ADMIN"), refresh_callbacks=[])
 
@@ -1682,6 +1948,7 @@ class MainWindow(QMainWindow):
         self.transactions = TransactionsWidget(db)
 
         self.tabs.addTab(self.dashboard, "Today")
+        self.tabs.addTab(self.text_message_generator, "Text Messages")
         self.tabs.addTab(self.inventory, "Inventory")
         self.tabs.addTab(self.scan_in, "Scan In")
         self.tabs.addTab(self.scan_out, "Scan Out")
